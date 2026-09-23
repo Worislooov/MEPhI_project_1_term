@@ -1,8 +1,14 @@
 """Модуль вспомогательных утилит и конфигурации оформления графиков."""
 
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Union, Tuple
 import matplotlib.pyplot as plt
+import numpy as np
+
+TrajectoryData = Union[
+    Tuple[np.ndarray, np.ndarray],
+    Tuple[np.ndarray, np.ndarray, np.ndarray]
+]
 
 STYLE_CONFIG: Dict[str, Any] = {
     "bg_dark": "#050814",
