@@ -20,6 +20,14 @@ STYLE_CONFIG: Dict[str, Any] = {
     "shadow_color": "#2563eb",
     "ray_color": "#f0f9ff",
     "ray_glow": "#38bdf8",
+    "ray_escape_core": "#f0f9ff",
+    "ray_escape_glow": "#38bdf8",
+    "ray_capture_core": "#fffbeb",
+    "ray_capture_glow": "#fde68a",
+    "ray_critical_core": "#ffffff",
+    "ray_critical_glow": "#93c5fd",
+    "theory_line": "#c084fc",
+    "numeric_points": "#38bdf8",
 }
 
 

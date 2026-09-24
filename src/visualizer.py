@@ -11,7 +11,6 @@ import numpy as np
 from utils import STYLE_CONFIG, apply_space_style, ensure_output_dir, TrajectoryData
 
 
-
 class Visualizer:
     """Класс для построения графиков и сохранения результатов моделирования."""
 
@@ -19,7 +18,7 @@ class Visualizer:
         """Инициализирует полотно визуализации с заданными пропорциями."""
         apply_space_style()
         self.fig, self.ax = plt.subplots(figsize=fig_size)
-        self._trajectories: List[Dict[str, np.ndarray]] = []
+        self._trajectories: List[Dict[str, Any]] = []
         self._static_lines: List[Line2D] = []
         self._setup_canvas()
 
@@ -27,8 +26,8 @@ class Visualizer:
         """Настраивает сетку, равный масштаб осей и базовую разметку."""
         self.ax.set_aspect("equal")
         self.ax.grid(True)
-        self.ax.set_xlabel("X [r_s]")
-        self.ax.set_ylabel("Y [r_s]")
+        self.ax.set_xlabel("X [$r_s$]")
+        self.ax.set_ylabel("Y [$r_s$]")
         self.ax.set_title(
             "Траектории фотонов вблизи горизонта событий",
             color=STYLE_CONFIG["text_color"],
@@ -49,52 +48,153 @@ class Visualizer:
         )
         self.ax.add_patch(black_hole)
 
+    def _resolve_ray_colors(self, ray_type: str) -> Tuple[str, str]:
+        """Определяет цветовую температуру луча в зависимости от характера траектории."""
+        if ray_type == "capture":
+            return STYLE_CONFIG["ray_capture_core"], STYLE_CONFIG["ray_capture_glow"]
+        if ray_type == "critical":
+            return STYLE_CONFIG["ray_critical_core"], STYLE_CONFIG["ray_critical_glow"]
+        return STYLE_CONFIG["ray_escape_core"], STYLE_CONFIG["ray_escape_glow"]
+
+    def _extract_trajectory_data(
+        self,
+        item: Any,
+        crop_box: Optional[float] = None
+    ) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray], str]:
+        """Извлекает координаты, время и статус из объекта симуляции или кортежа."""
+        ray_type = "escape"
+        t_arr = None
+
+        if hasattr(item, "x") and hasattr(item, "y"):
+            x_arr = np.asarray(item.x, dtype=float)
+            y_arr = np.asarray(item.y, dtype=float)
+            status = getattr(item, "status", "")
+            if status == "В черной дыре":
+                ray_type = "capture"
+            elif hasattr(item, "b") and hasattr(item, "r_s"):
+                if abs(abs(item.b) - np.sqrt(27.0) / 2.0 * item.r_s) < 0.05:
+                    ray_type = "critical"
+        elif len(item) == 3:
+            x_arr = np.asarray(item[0], dtype=float)
+            y_arr = np.asarray(item[1], dtype=float)
+            t_arr = np.asarray(item[2], dtype=float)
+        else:
+            x_arr = np.asarray(item[0], dtype=float)
+            y_arr = np.asarray(item[1], dtype=float)
+
+        if crop_box is not None and len(x_arr) > 0:
+            mask = (np.abs(x_arr) <= crop_box) & (np.abs(y_arr) <= crop_box)
+            if np.any(mask):
+                first_idx = int(np.argmax(mask))
+                last_idx = len(mask) - int(np.argmax(mask[::-1]))
+                x_arr = x_arr[first_idx:last_idx]
+                y_arr = y_arr[first_idx:last_idx]
+                if t_arr is not None:
+                    t_arr = t_arr[first_idx:last_idx]
+
+        return x_arr, y_arr, t_arr, ray_type
+
     def plot_trajectories(
         self,
-        trajectories: List[TrajectoryData],
-        labels: Optional[List[str]] = None
+        trajectories: List[Any],
+        ray_types: Optional[List[str]] = None,
+        labels: Optional[List[str]] = None,
+        crop_box: Optional[float] = 12.0
     ) -> None:
         """Отображает набор переданных траекторий фотонов с неоновым шлейфом."""
         self._trajectories = []
 
-        for item in trajectories:
-            if len(item) == 3:
-                x_raw, y_raw, t_raw = item
-                x_arr = np.asarray(x_raw, dtype=float)
-                y_arr = np.asarray(y_raw, dtype=float)
-                t_arr = np.asarray(t_raw, dtype=float)
-            else:
-                x_raw, y_raw = item
-                x_arr = np.asarray(x_raw, dtype=float)
-                y_arr = np.asarray(y_raw, dtype=float)
-                t_arr = None
+        for idx, item in enumerate(trajectories):
+            x_arr, y_arr, t_arr, inferred_type = self._extract_trajectory_data(item, crop_box)
 
-            if len(x_arr) > 0 and len(y_arr) > 0:
-                self._trajectories.append({
-                    "x": x_arr,
-                    "y": y_arr,
-                    "t": t_arr
-                })
+            if len(x_arr) == 0 or len(y_arr) == 0:
+                continue
 
-        for idx, tr in enumerate(self._trajectories):
+            r_type = ray_types[idx] if ray_types and idx < len(ray_types) else inferred_type
+            c_core, c_glow = self._resolve_ray_colors(r_type)
+
+            self._trajectories.append({
+                "x": x_arr,
+                "y": y_arr,
+                "t": t_arr,
+                "type": r_type,
+                "c_core": c_core,
+                "c_glow": c_glow
+            })
+
             label = labels[idx] if labels and idx < len(labels) else None
 
             g_line, = self.ax.plot(
-                tr["x"], tr["y"],
-                color=STYLE_CONFIG["ray_glow"],
+                x_arr, y_arr,
+                color=c_glow,
                 linewidth=3.0,
-                alpha=0.25,
+                alpha=0.3,
                 zorder=3
             )
             c_line, = self.ax.plot(
-                tr["x"], tr["y"],
-                color=STYLE_CONFIG["ray_color"],
+                x_arr, y_arr,
+                color=c_core,
                 linewidth=1.0,
                 alpha=0.95,
                 zorder=4,
                 label=label
             )
             self._static_lines.extend([g_line, c_line])
+
+    def plot_comparison(
+        self,
+        b_numerical: np.ndarray,
+        alpha_numerical: np.ndarray,
+        rs: float = 1.0,
+        b_theory_min: Optional[float] = None,
+        b_theory_max: Optional[float] = None
+    ) -> None:
+        """Строит график сопоставления численного расчета с теоретической формулой alpha = 2rs / b."""
+        self.ax.clear()
+        self.ax.set_aspect("auto")
+        self.ax.grid(True)
+
+        b_num = np.asarray(b_numerical, dtype=float)
+        alpha_num = np.asarray(alpha_numerical, dtype=float)
+
+        min_b = b_theory_min if b_theory_min is not None else max(float(np.min(b_num)), 2.6 * rs)
+        max_b = b_theory_max if b_theory_max is not None else float(np.max(b_num))
+
+        b_theory = np.linspace(min_b, max_b, 200)
+        alpha_theory = (2.0 * rs) / b_theory
+
+        self.ax.plot(
+            b_theory, alpha_theory,
+            color=STYLE_CONFIG["theory_line"],
+            linewidth=2.0,
+            linestyle="--",
+            label=r"Теория ($\alpha = 2r_s / b$)"
+        )
+        self.ax.scatter(
+            b_num, alpha_num,
+            color=STYLE_CONFIG["numeric_points"],
+            s=35,
+            edgecolors=STYLE_CONFIG["ray_escape_core"],
+            linewidths=0.8,
+            zorder=5,
+            label="Численное решение"
+        )
+        self.ax.plot(
+            b_num, alpha_num,
+            color=STYLE_CONFIG["numeric_points"],
+            linewidth=1.0,
+            alpha=0.4
+        )
+
+        self.ax.set_xlabel("Прицельный параметр $b$ [$r_s$]")
+        self.ax.set_ylabel("Угол отклонения $\\alpha$ [рад]")
+        self.ax.set_title(
+            "Зависимость угла отклонения фотона от прицельного параметра",
+            color=STYLE_CONFIG["text_color"],
+            pad=15,
+            fontsize=12,
+            fontweight="bold"
+        )
 
     def set_limits(self, x_limit: Tuple[float, float], y_limit: Tuple[float, float]) -> None:
         """Задает видимые границы координатной сетки."""
@@ -126,7 +226,9 @@ class Visualizer:
                     "x": tr["x"],
                     "y": tr["y"],
                     "param": tr["t"],
-                    "max_param": float(tr["t"][-1])
+                    "max_param": float(tr["t"][-1]),
+                    "c_core": tr["c_core"],
+                    "c_glow": tr["c_glow"]
                 })
         else:
             for tr in self._trajectories:
@@ -138,7 +240,9 @@ class Visualizer:
                     "x": tr["x"],
                     "y": tr["y"],
                     "param": s,
-                    "max_param": float(s[-1])
+                    "max_param": float(s[-1]),
+                    "c_core": tr["c_core"],
+                    "c_glow": tr["c_glow"]
                 })
             global_max_param = max((p["max_param"] for p in prepared), default=1.0)
 
@@ -178,15 +282,15 @@ class Visualizer:
 
         anim_artists = []
         flat_artists = []
-        for _ in self._trajectories:
+        for p in path_data:
             glow_trail, = self.ax.plot(
-                [], [], color=STYLE_CONFIG["ray_glow"], linewidth=3.0, alpha=0.25, zorder=3, animated=True
+                [], [], color=p["c_glow"], linewidth=3.0, alpha=0.3, zorder=3, animated=True
             )
             core_trail, = self.ax.plot(
-                [], [], color=STYLE_CONFIG["ray_color"], linewidth=1.0, alpha=0.95, zorder=4, animated=True
+                [], [], color=p["c_core"], linewidth=1.0, alpha=0.95, zorder=4, animated=True
             )
             head_glow, = self.ax.plot(
-                [], [], marker="o", markersize=6, color=STYLE_CONFIG["ray_glow"], alpha=0.6, zorder=6, animated=True
+                [], [], marker="o", markersize=6, color=p["c_glow"], alpha=0.6, zorder=6, animated=True
             )
             head_core, = self.ax.plot(
                 [], [], marker="o", markersize=3, color="#ffffff", alpha=1.0, zorder=7, animated=True
