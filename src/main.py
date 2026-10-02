@@ -75,7 +75,7 @@ def main() -> None:
     """Точка входа: расчет широкополосного пучка и сохранение графики в MP4 и PNG."""
     rs_val = 1.0
 
-    impact_params = [float(val) for val in np.linspace(2.5, 2.7, 400)]
+    impact_params = [float(val) for val in np.linspace(0.00001, 9, 100)]
 
     start_calc = time.time()
     successful_sims = run_photon_batch(rs=rs_val, impact_parameters=impact_params)
@@ -87,20 +87,20 @@ def main() -> None:
     vis_scene = Visualizer(fig_size=(16, 9))
     vis_scene.draw_black_hole(rs=rs_val)
     vis_scene.plot_trajectories(all_rays, crop_box=20.0)
-    vis_scene.set_limits((-9.0, 9.0), (-5.125, 5.125))
+    vis_scene.set_limits((-16.0, 16.0), (-9.125, 9.125))
 
-    img_output = Path("results") / "photon_trajectories_wide.png"
+    img_output = Path("results") / "main_pic.png"
     vis_scene.save(img_output, dpi=300)
     print(f"Статичный график сохранен: {img_output.resolve()}")
 
-    video_output = Path("results") / "photon_trajectories_wide.mp4"
+    video_output = Path("results") / "main_vid.mp4"
     start_anim = time.time()
     try:
-        vis_scene.save(video_output, fps=30, duration=20.0)
+        vis_scene.save(video_output, fps=30, duration=10.0)
         print(f"MP4-анимация сохранена: {video_output.resolve()} ({time.time() - start_anim:.2f} сек)")
     except FileNotFoundError as err:
         print(f"Ошибка сохранения MP4: {err}")
-        fallback_gif = Path("results") / "photon_trajectories_wide.gif"
+        fallback_gif = Path("results") / "main_gif.gif"
         vis_scene.save(fallback_gif, fps=25, duration=4.0)
         print(f"Анимация сохранена в GIF: {fallback_gif.resolve()}")
 
