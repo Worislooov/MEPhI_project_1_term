@@ -48,19 +48,9 @@ class PhotonSimulation:
     _event_horizont.terminal = True
     _event_horizont.direction = -1
 
-    # def _event_esc(self, phi: float, state: list):
-    #     u, du_dphi = state
-    #     initial_u = np.sin(self.phi_0) / self.b
-
-    #     # если фотон улетел вдаль
-    #     if du_dphi < 0 and u < initial_u * 0.5:
-    #         return 0.0
-    #     return 1.0
-    # _event_esc.terminal = True
-    # _event_esc.direction = 0
-
+    
     def _event_esc(self, phi: float, state: list):
-        """Срабатывает, когда удаляющийся фотон возвращается на безопасную дистанцию."""
+    #Если фотон на безопасной дистанции
         u = state[0]
         initial_u = np.sin(self.phi_0) / self.b
         return u - initial_u * 0.5
